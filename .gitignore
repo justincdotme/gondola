@@ -10,6 +10,9 @@ build/
 venv/
 .venv/
 *.db
+certs/
+gondola.pid
+gondola.log
 
 # Environment
 .env

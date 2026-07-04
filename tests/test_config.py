@@ -12,6 +12,8 @@ def test_load_config_with_all_defaults(monkeypatch):
     assert cfg.host == "0.0.0.0"
     assert cfg.port == 8075
     assert cfg.bluetooth_adapter is None
+    assert cfg.tls_cert is None
+    assert cfg.tls_key is None
 
 
 def test_load_config_custom_values(monkeypatch):
@@ -21,6 +23,8 @@ def test_load_config_custom_values(monkeypatch):
     monkeypatch.setenv("SENSOR_RETENTION_DAYS", "0")
     monkeypatch.setenv("SENSOR_PORT", "9000")
     monkeypatch.setenv("BLUETOOTH_ADAPTER", "hci1")
+    monkeypatch.setenv("SENSOR_TLS_CERT", "/path/to/cert.crt")
+    monkeypatch.setenv("SENSOR_TLS_KEY", "/path/to/cert.key")
     cfg = load_config()
     assert cfg.api_key == "custom-key"
     assert cfg.db_path == "/tmp/test.db"
@@ -28,6 +32,8 @@ def test_load_config_custom_values(monkeypatch):
     assert cfg.retention_days == 0
     assert cfg.port == 9000
     assert cfg.bluetooth_adapter == "hci1"
+    assert cfg.tls_cert == "/path/to/cert.crt"
+    assert cfg.tls_key == "/path/to/cert.key"
 
 
 def test_load_config_missing_api_key_raises(monkeypatch):

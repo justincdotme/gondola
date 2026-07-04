@@ -41,20 +41,26 @@ def insert_reading(conn: sqlite3.Connection, mac: str, device_name: str | None,
 
 
 def get_readings(conn: sqlite3.Connection, mac: str, limit: int = 100,
-                 since: str | None = None) -> list[dict]:
-    query_base = """
-        SELECT mac, device_name, temperature, humidity, battery, rssi,
-               recorded_at FROM readings
-        WHERE mac = ?
-    """
-    if since:
-        query = query_base + " AND recorded_at > ?"
-        cursor = conn.execute(query + " ORDER BY recorded_at DESC LIMIT ?",
-                              (mac, since, limit))
-    else:
-        cursor = conn.execute(query_base + " ORDER BY recorded_at DESC LIMIT ?",
-                              (mac, limit))
-    return [dict(row) for row in cursor.fetchall()]
+                 from_ts: str | None = None,
+                 to_ts: str | None = None) -> tuple[list[dict], bool]:
+    clauses = ["mac = ?"]
+    params: list = [mac]
+    if from_ts:
+        clauses.append("recorded_at > ?")
+        params.append(from_ts)
+    if to_ts:
+        clauses.append("recorded_at <= ?")
+        params.append(to_ts)
+    params.append(limit + 1)
+    cursor = conn.execute(
+        "SELECT mac, device_name, temperature, humidity, battery, rssi, "
+        "recorded_at FROM readings WHERE " + " AND ".join(clauses)
+        + " ORDER BY recorded_at ASC LIMIT ?",
+        params,
+    )
+    rows = [dict(r) for r in cursor.fetchall()]
+    has_more = len(rows) > limit
+    return rows[:limit], has_more
 
 
 def delete_old_readings(conn: sqlite3.Connection, days: int) -> int:
