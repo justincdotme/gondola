@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+venv/
+.venv/
+*.db
+
+# Environment
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local tooling and project docs (not for the shared repo)
+/.claude
+/.superpowers
+/docs/superpowers
+/docs/project
+/temp
+AGENTS.md
+/codex

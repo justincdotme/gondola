@@ -1,0 +1,16 @@
+[Unit]
+Description=Govee H5075 Sensor Gateway
+After=bluetooth.target network.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+User=justin
+WorkingDirectory=/home/justin/ble-gateway
+EnvironmentFile=/etc/sensor-gateway/env
+ExecStart=/home/justin/ble-gateway/venv/bin/python main.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
