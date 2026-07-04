@@ -94,9 +94,12 @@ List all sensors with their most recent reading.
 Historical readings for a specific sensor.
 
 **Query parameters:**
-- `mac` (required) — sensor MAC address
-- `limit` (optional) — max results, capped at 1000 (default: 100)
-- `since` (optional) — ISO 8601 timestamp; return readings after this time
+
+| Param | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `mac` | yes | | Sensor MAC address |
+| `limit` | no | 100 | Max results, capped at 1000 |
+| `since` | no | | ISO 8601 timestamp; return readings after this time |
 
 **Response:**
 ```json
@@ -115,7 +118,7 @@ Historical readings for a specific sensor.
 }
 ```
 
-Full OpenAPI schema available at `/docs` when the service is running.
+OpenAPI docs are disabled in production. To generate the schema locally, temporarily remove the `docs_url=None` kwargs from `create_app()` in main.py.
 
 ## Development
 
