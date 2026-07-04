@@ -17,14 +17,16 @@ from auth import require_api_key, InvalidApiKey
 logger = logging.getLogger(__name__)
 
 
+async def retention_loop(db, retention_days):
+    while True:
+        if retention_days > 0:
+            deleted = delete_old_readings(db, retention_days)
+            if deleted:
+                logger.info("Retention cleanup: removed %d rows older than %d days", deleted, retention_days)
+        await asyncio.sleep(86400)
+
+
 def create_app() -> FastAPI:
-    async def _retention_loop(db, retention_days):
-        while True:
-            if retention_days > 0:
-                deleted = delete_old_readings(db, retention_days)
-                if deleted:
-                    logger.info("Retention cleanup: removed %d rows older than %d days", deleted, retention_days)
-            await asyncio.sleep(86400)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -44,7 +46,7 @@ def create_app() -> FastAPI:
             app.state.collector_latest = collector.latest_readings
             app.state.start_time = datetime.now(timezone.utc)
 
-            retention_task = asyncio.create_task(_retention_loop(db, config.retention_days))
+            retention_task = asyncio.create_task(retention_loop(db, config.retention_days))
 
             try:
                 yield
@@ -61,7 +63,7 @@ def create_app() -> FastAPI:
                     pass
                 db.close()
 
-    app = FastAPI(lifespan=lifespan)
+    app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.exception_handler(InvalidApiKey)
     async def handle_invalid_api_key(request, exc):
