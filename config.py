@@ -12,6 +12,8 @@ class Config:
     host: str
     port: int
     bluetooth_adapter: str | None
+    tls_cert: str | None
+    tls_key: str | None
 
 
 def load_config() -> Config:
@@ -31,4 +33,6 @@ def load_config() -> Config:
         host=os.environ.get("SENSOR_HOST", "0.0.0.0"),
         port=int(os.environ.get("SENSOR_PORT", "8075")),
         bluetooth_adapter=os.environ.get("BLUETOOTH_ADAPTER") or None,
+        tls_cert=os.environ.get("SENSOR_TLS_CERT") or None,
+        tls_key=os.environ.get("SENSOR_TLS_KEY") or None,
     )

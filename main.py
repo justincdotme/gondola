@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import HTTPException as StarletteHTTPException
 
@@ -15,6 +15,12 @@ from auth import require_api_key, InvalidApiKey
 
 
 logger = logging.getLogger(__name__)
+
+
+def _to_stored(dt: datetime) -> str:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 async def retention_loop(db, retention_days):
@@ -109,14 +115,23 @@ def create_app() -> FastAPI:
         return {"sensors": sensors_list}
 
     @app.get("/api/v1/readings")
-    async def readings(mac: str, limit: int = 100, since: str | None = None, key: str = Depends(require_api_key)):
+    async def readings(
+        mac: str,
+        limit: int = 100,
+        from_: datetime | None = Query(default=None, alias="from"),
+        to: datetime | None = Query(default=None, alias="to"),
+        key: str = Depends(require_api_key),
+    ):
         if limit > 1000:
             limit = 1000
 
         collector_latest = getattr(app.state, "collector_latest", {})
         db = app.state.db
 
-        rows = get_readings(db, mac, limit=limit, since=since)
+        from_ts = _to_stored(from_) if from_ else None
+        to_ts = _to_stored(to) if to else None
+
+        rows, has_more = get_readings(db, mac, limit=limit, from_ts=from_ts, to_ts=to_ts)
 
         if not rows and mac not in collector_latest:
             raise HTTPException(status_code=404, detail={"error": "Unknown sensor", "mac": mac})
@@ -124,6 +139,7 @@ def create_app() -> FastAPI:
         return {
             "mac": mac,
             "count": len(rows),
+            "has_more": has_more,
             "readings": [
                 {
                     "temperature": r["temperature"],
@@ -143,4 +159,9 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8075)
+    config = load_config()
+    kwargs: dict = {"host": config.host, "port": config.port}
+    if config.tls_cert and config.tls_key:
+        kwargs["ssl_certfile"] = config.tls_cert
+        kwargs["ssl_keyfile"] = config.tls_key
+    uvicorn.run(app, **kwargs)

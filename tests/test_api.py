@@ -66,18 +66,95 @@ def test_sensors_requires_auth(client):
     assert resp.status_code == 401
 
 
+def test_readings_ascending_order(client):
+    resp = client.get("/api/v1/readings", params={"mac": "A4:C1:38:7D:3A:14"}, headers=HEADERS)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["count"] == 2
+    assert body["has_more"] is False
+    assert body["readings"][0]["recorded_at"] == "2026-07-03T13:59:00Z"
+    assert body["readings"][1]["recorded_at"] == "2026-07-03T14:00:00Z"
+
+
 def test_readings_with_limit(client):
     resp = client.get("/api/v1/readings", params={"mac": "A4:C1:38:7D:3A:14", "limit": 1}, headers=HEADERS)
     assert resp.status_code == 200
     body = resp.json()
     assert body["count"] == 1
-    assert len(body["readings"]) == 1
+    assert body["has_more"] is True
+    assert body["readings"][0]["recorded_at"] == "2026-07-03T13:59:00Z"
 
 
-def test_readings_with_since(client):
-    resp = client.get("/api/v1/readings", params={"mac": "A4:C1:38:7D:3A:14", "since": "2026-07-03T13:59:30Z"}, headers=HEADERS)
+def test_readings_with_from(client):
+    resp = client.get("/api/v1/readings", params={"mac": "A4:C1:38:7D:3A:14", "from": "2026-07-03T13:59:30Z"}, headers=HEADERS)
     assert resp.status_code == 200
-    assert resp.json()["count"] == 1
+    body = resp.json()
+    assert body["count"] == 1
+    assert body["has_more"] is False
+    assert body["readings"][0]["recorded_at"] == "2026-07-03T14:00:00Z"
+
+
+def test_readings_with_to(client):
+    resp = client.get("/api/v1/readings", params={"mac": "A4:C1:38:7D:3A:14", "to": "2026-07-03T13:59:00Z"}, headers=HEADERS)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["count"] == 1
+    assert body["has_more"] is False
+    assert body["readings"][0]["recorded_at"] == "2026-07-03T13:59:00Z"
+
+
+def test_readings_from_to_window(client):
+    db = client.app.state.db
+    insert_reading(db, "A4:C1:38:7D:3A:14", "GVH5075_3A14", 23.0, 46.0, 87, -42, "2026-07-03T14:01:00Z")
+    insert_reading(db, "A4:C1:38:7D:3A:14", "GVH5075_3A14", 24.0, 47.0, 87, -42, "2026-07-03T14:02:00Z")
+    resp = client.get("/api/v1/readings", params={
+        "mac": "A4:C1:38:7D:3A:14",
+        "from": "2026-07-03T13:59:00Z",
+        "to": "2026-07-03T14:01:00Z",
+    }, headers=HEADERS)
+    body = resp.json()
+    assert body["count"] == 2
+    assert body["has_more"] is False
+    assert body["readings"][0]["recorded_at"] == "2026-07-03T14:00:00Z"
+    assert body["readings"][1]["recorded_at"] == "2026-07-03T14:01:00Z"
+
+
+def test_readings_has_more(client):
+    db = client.app.state.db
+    for i in range(5):
+        insert_reading(db, "A4:C1:38:7D:3A:14", "GVH5075_3A14",
+                       20.0 + i, 40.0 + i, 85, -50,
+                       f"2026-07-03T15:0{i}:00Z")
+    resp = client.get("/api/v1/readings",
+                      params={"mac": "A4:C1:38:7D:3A:14", "limit": 3},
+                      headers=HEADERS)
+    body = resp.json()
+    assert body["count"] == 3
+    assert body["has_more"] is True
+    assert body["readings"][0]["recorded_at"] == "2026-07-03T13:59:00Z"
+
+    last_ts = body["readings"][-1]["recorded_at"]
+    resp = client.get("/api/v1/readings",
+                      params={"mac": "A4:C1:38:7D:3A:14", "limit": 3, "from": last_ts},
+                      headers=HEADERS)
+    body = resp.json()
+    assert body["count"] == 3
+    assert body["has_more"] is True
+
+    last_ts = body["readings"][-1]["recorded_at"]
+    resp = client.get("/api/v1/readings",
+                      params={"mac": "A4:C1:38:7D:3A:14", "limit": 3, "from": last_ts},
+                      headers=HEADERS)
+    body = resp.json()
+    assert body["count"] == 1
+    assert body["has_more"] is False
+
+
+def test_readings_invalid_from_returns_422(client):
+    resp = client.get("/api/v1/readings",
+                      params={"mac": "A4:C1:38:7D:3A:14", "from": "not-a-date"},
+                      headers=HEADERS)
+    assert resp.status_code == 422
 
 
 def test_readings_unknown_mac(client):

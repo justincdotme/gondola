@@ -31,7 +31,7 @@ async def test_retention_loop_deletes_old_rows(db):
     except asyncio.CancelledError:
         pass
 
-    rows = get_readings(db, "AA:BB:CC:DD:EE:FF")
+    rows, _ = get_readings(db, "AA:BB:CC:DD:EE:FF")
     assert len(rows) == 1
     assert rows[0]["temperature"] == 21.0
 
@@ -48,5 +48,5 @@ async def test_retention_loop_skips_when_disabled(db):
     except asyncio.CancelledError:
         pass
 
-    rows = get_readings(db, "AA:BB:CC:DD:EE:FF")
+    rows, _ = get_readings(db, "AA:BB:CC:DD:EE:FF")
     assert len(rows) == 1
