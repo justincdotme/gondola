@@ -39,9 +39,9 @@ def create_app() -> FastAPI:
             app.state.collector_latest = {}
 
             collector = Collector(config, db)
-            app.state.collector_running = False
 
             task = asyncio.create_task(collector.run())
+            app.state.collector_running = True
             app.state.collector_task = task
             app.state.collector_latest = collector.latest_readings
             app.state.start_time = datetime.now(timezone.utc)
