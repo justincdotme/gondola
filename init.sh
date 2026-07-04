@@ -19,7 +19,18 @@ SENSOR_TLS_KEY=$INSTALL_DIR/certs/dev.key
 EOF
   echo "[+] Created .env with generated API key"
 else
-  echo "[=] .env already exists, skipping"
+  echo "[=] .env already exists"
+  if ! grep -q "SENSOR_TLS_CERT" "$INSTALL_DIR/.env"; then
+    cat >> "$INSTALL_DIR/.env" <<EOF
+SENSOR_TLS_CERT=$INSTALL_DIR/certs/dev.crt
+SENSOR_TLS_KEY=$INSTALL_DIR/certs/dev.key
+EOF
+    echo "[+] Added TLS certificate paths to .env"
+  fi
+  if grep -q "SENSOR_PORT=8075" "$INSTALL_DIR/.env"; then
+    sed -i 's/SENSOR_PORT=8075/SENSOR_PORT=8443/' "$INSTALL_DIR/.env"
+    echo "[+] Updated port from 8075 to 8443 for TLS"
+  fi
 fi
 
 # --- Hostname ---
