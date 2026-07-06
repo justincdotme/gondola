@@ -32,3 +32,8 @@ gondola.log
 AGENTS.md
 /codex
 /live_qa.py
+
+# Ignore the db
+readings.db
+readings.db-shm
+readings.db-wal
