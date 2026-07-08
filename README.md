@@ -1,6 +1,6 @@
 # Sensor Gateway
 
-BLE sensor gateway for Govee H5075 thermometer/hygrometers. Collects temperature, humidity, and battery readings from Bluetooth Low Energy sensors and serves them via a REST API.
+BLE sensor gateway for Bluetooth Low Energy environmental sensors. Collects readings such as temperature, humidity, and battery level and serves them via a REST API. Ships with a parser for the Govee H5075 thermometer/hygrometer; adding support for another sensor only requires a new parser, see [docs/writing-a-parser.md](docs/writing-a-parser.md).
 
 ## Requirements
 
@@ -85,3 +85,5 @@ Install development dependencies:
 ```bash
 pip install -r requirements-dev.txt
 ```
+
+To add support for a new sensor, see [docs/writing-a-parser.md](docs/writing-a-parser.md).
