@@ -46,6 +46,7 @@ class AuthTracker:
         return len(self._failures[client_ip]) >= self.max_failures
 
 
+# Allow 60-second clock skew to tolerate client/server time drift.
 TIMESTAMP_WINDOW = 60
 
 
@@ -55,6 +56,11 @@ async def require_hmac_auth(
     x_timestamp: str | None = Header(default=None),
 ) -> None:
     secret = os.environ.get("SENSOR_GATEWAY_API_KEY", "")
+    if not secret:
+        logger.error(
+            "SENSOR_GATEWAY_API_KEY not configured; rejecting auth"
+        )
+        raise InvalidApiKey()
 
     if x_signature and x_timestamp:
         try:

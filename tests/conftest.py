@@ -3,7 +3,7 @@ import hmac
 import os
 import time
 
-os.environ.setdefault("SENSOR_GATEWAY_API_KEY", "test-api-key")
+os.environ.setdefault("SENSOR_GATEWAY_API_KEY", "test-key")
 
 
 def make_hmac_headers(method, path, secret="test-key", timestamp=None):

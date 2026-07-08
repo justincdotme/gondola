@@ -89,6 +89,9 @@ def create_app() -> FastAPI:
         if request.url.path == "/api/v1/health":
             return await call_next(request)
 
+        if not request.client:
+            return await call_next(request)
+
         limiter = request.app.state.rate_limiter
         allowed, retry_after = limiter.check(request.client.host)
 

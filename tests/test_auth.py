@@ -1,9 +1,12 @@
 import time
+from unittest.mock import patch
+
 import pytest
 from fastapi import FastAPI, Depends
 from fastapi.testclient import TestClient
 from fastapi.responses import JSONResponse
-from auth import require_hmac_auth, InvalidApiKey
+
+from auth import require_hmac_auth, InvalidApiKey, AuthTracker
 from conftest import make_hmac_headers
 
 
@@ -70,10 +73,6 @@ def test_invalid_timestamp_format(app_with_auth):
     headers["X-Timestamp"] = "not-a-number"
     resp = app_with_auth.get("/protected", headers=headers)
     assert resp.status_code == 401
-
-
-from unittest.mock import patch
-from auth import AuthTracker
 
 
 def test_tracker_records_failure():
