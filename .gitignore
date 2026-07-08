@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+venv/
+.venv/
+*.db
+certs/
+gondola.pid
+gondola.log
+
+# Environment
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local tooling and project docs (not for the shared repo)
+/.claude
+/.superpowers
+/docs/superpowers
+/docs/project
+/temp
+AGENTS.md
+/codex
+/live_qa.py
+
+# Ignore the db
+readings.db
+readings.db-shm
+readings.db-wal
