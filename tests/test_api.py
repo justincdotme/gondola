@@ -16,26 +16,29 @@ def db_path():
     os.unlink(path)
 
 
+def _reading(temperature=22.5, humidity=45.0, battery=87, rssi=-42,
+             recorded_at="2026-07-03T14:00:00Z"):
+    return Reading(
+        mac="A4:C1:38:7D:3A:14", device_name="GVH5075_3A14",
+        sensor_type="govee_h5075",
+        measurements={"temperature": temperature, "humidity": humidity},
+        battery=battery, rssi=rssi, recorded_at=recorded_at,
+    )
+
+
 @pytest.fixture
 def client(db_path, monkeypatch):
     monkeypatch.setenv("SENSOR_GATEWAY_API_KEY", "test-key")
     monkeypatch.setenv("SENSOR_DB_PATH", db_path)
     app = create_app()
     app.state.collector_latest = {
-        "A4:C1:38:7D:3A:14": Reading(
-            mac="A4:C1:38:7D:3A:14",
-            device_name="GVH5075_3A14",
-            temperature=22.5,
-            humidity=45.0,
-            battery=87,
-            rssi=-42,
-            recorded_at="2026-07-03T14:00:00Z",
-        )
+        "A4:C1:38:7D:3A:14": _reading(),
     }
     app.state.collector_running = True
     db = init_db(db_path)
-    insert_reading(db, "A4:C1:38:7D:3A:14", "GVH5075_3A14", 22.5, 45.0, 87, -42, "2026-07-03T14:00:00Z")
-    insert_reading(db, "A4:C1:38:7D:3A:14", "GVH5075_3A14", 22.0, 44.0, 87, -45, "2026-07-03T13:59:00Z")
+    insert_reading(db, _reading(recorded_at="2026-07-03T14:00:00Z"))
+    insert_reading(db, _reading(temperature=22.0, humidity=44.0, rssi=-45,
+                                recorded_at="2026-07-03T13:59:00Z"))
     app.state.db = db
     return TestClient(app)
 
@@ -58,7 +61,8 @@ def test_sensors_returns_latest(client):
     sensors = resp.json()["sensors"]
     assert len(sensors) == 1
     assert sensors[0]["mac"] == "A4:C1:38:7D:3A:14"
-    assert sensors[0]["last_reading"]["temperature"] == 22.5
+    assert sensors[0]["sensor_type"] == "govee_h5075"
+    assert sensors[0]["last_reading"]["measurements"]["temperature"] == 22.5
 
 
 def test_sensors_requires_auth(client):
@@ -105,8 +109,10 @@ def test_readings_with_to(client):
 
 def test_readings_from_to_window(client):
     db = client.app.state.db
-    insert_reading(db, "A4:C1:38:7D:3A:14", "GVH5075_3A14", 23.0, 46.0, 87, -42, "2026-07-03T14:01:00Z")
-    insert_reading(db, "A4:C1:38:7D:3A:14", "GVH5075_3A14", 24.0, 47.0, 87, -42, "2026-07-03T14:02:00Z")
+    insert_reading(db, _reading(temperature=23.0, humidity=46.0,
+                                recorded_at="2026-07-03T14:01:00Z"))
+    insert_reading(db, _reading(temperature=24.0, humidity=47.0,
+                                recorded_at="2026-07-03T14:02:00Z"))
     resp = client.get("/api/v1/readings", params={
         "mac": "A4:C1:38:7D:3A:14",
         "from": "2026-07-03T13:59:00Z",
@@ -122,9 +128,9 @@ def test_readings_from_to_window(client):
 def test_readings_has_more(client):
     db = client.app.state.db
     for i in range(5):
-        insert_reading(db, "A4:C1:38:7D:3A:14", "GVH5075_3A14",
-                       20.0 + i, 40.0 + i, 85, -50,
-                       f"2026-07-03T15:0{i}:00Z")
+        insert_reading(db, _reading(temperature=20.0 + i, humidity=40.0 + i,
+                                    battery=85, rssi=-50,
+                                    recorded_at=f"2026-07-03T15:0{i}:00Z"))
     resp = client.get("/api/v1/readings",
                       params={"mac": "A4:C1:38:7D:3A:14", "limit": 3},
                       headers=HEADERS)

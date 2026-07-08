@@ -104,9 +104,9 @@ def create_app() -> FastAPI:
             sensors_list.append({
                 "mac": reading.mac,
                 "device_name": reading.device_name,
+                "sensor_type": reading.sensor_type,
                 "last_reading": {
-                    "temperature": reading.temperature,
-                    "humidity": reading.humidity,
+                    "measurements": reading.measurements,
                     "battery": reading.battery,
                     "rssi": reading.rssi,
                     "recorded_at": reading.recorded_at,
@@ -142,8 +142,8 @@ def create_app() -> FastAPI:
             "has_more": has_more,
             "readings": [
                 {
-                    "temperature": r["temperature"],
-                    "humidity": r["humidity"],
+                    "sensor_type": r["sensor_type"],
+                    "measurements": r["measurements"],
                     "battery": r["battery"],
                     "rssi": r["rssi"],
                     "recorded_at": r["recorded_at"],

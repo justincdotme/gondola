@@ -4,13 +4,22 @@ set -eu
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 PID_FILE="$SCRIPT_DIR/gondola.pid"
 LOG_FILE="$SCRIPT_DIR/gondola.log"
+PROC_PATTERN="$SCRIPT_DIR/venv/bin/python main.py"
+
+find_running_pid() {
+  if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+    cat "$PID_FILE"
+    return 0
+  fi
+  pgrep -f "$PROC_PATTERN" 2>/dev/null || return 1
+}
 
 case "${1:-}" in
   --start)
-    if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-      echo "Already running (PID $(cat "$PID_FILE"))"
+    EXISTING=$(find_running_pid) && {
+      echo "Already running (PID $EXISTING)"
       exit 1
-    fi
+    }
     if [ ! -f "$SCRIPT_DIR/.env" ]; then
       echo "No .env file found. Run ./init.sh first." >&2
       exit 1
@@ -43,40 +52,44 @@ case "${1:-}" in
     fi
     ;;
   --stop)
-    if [ ! -f "$PID_FILE" ]; then
-      echo "Not running (no PID file)"
+    PID=$(find_running_pid) || {
+      echo "Not running (no PID file, no matching process)" >&2
       exit 1
+    }
+    if [ ! -f "$PID_FILE" ]; then
+      echo "WARNING: No PID file. Found orphaned process (PID $PID)." >&2
     fi
-    PID=$(cat "$PID_FILE")
     if kill "$PID" 2>/dev/null; then
-      rm "$PID_FILE"
+      rm -f "$PID_FILE"
       echo "Stopped (PID $PID)"
     else
-      rm "$PID_FILE"
-      echo "Process $PID not found, cleaned up PID file"
+      rm -f "$PID_FILE"
+      echo "Process $PID already exited, cleaned up" >&2
     fi
     ;;
   --restart)
-    "$0" --stop 2>/dev/null || true
+    "$0" --stop || true
     sleep 1
     "$0" --start
     ;;
   --status)
-    if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-      PID=$(cat "$PID_FILE")
-      set -a
-      . "$SCRIPT_DIR/.env"
-      set +a
-      PORT=${SENSOR_PORT:-8443}
-      HEALTH_URL="https://localhost:$PORT/api/v1/health"
-      if curl -sk --max-time 3 "$HEALTH_URL" >/dev/null 2>&1; then
-        echo "Running (PID $PID, listening on port $PORT)"
-      else
-        echo "Process running (PID $PID) but not responding on port $PORT"
-      fi
-    else
+    PID=$(find_running_pid) || {
       echo "Not running"
       [ -f "$PID_FILE" ] && rm "$PID_FILE"
+      exit 1
+    }
+    if [ ! -f "$PID_FILE" ]; then
+      echo "WARNING: No PID file. Process was started outside this script." >&2
+    fi
+    set -a
+    . "$SCRIPT_DIR/.env"
+    set +a
+    PORT=${SENSOR_PORT:-8443}
+    HEALTH_URL="https://localhost:$PORT/api/v1/health"
+    if curl -sk --max-time 3 "$HEALTH_URL" >/dev/null 2>&1; then
+      echo "Running (PID $PID, listening on port $PORT)"
+    else
+      echo "Process running (PID $PID) but not responding on port $PORT"
     fi
     ;;
   *)

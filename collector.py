@@ -11,25 +11,7 @@ from bleak.backends.scanner import AdvertisementData
 
 from config import Config
 from database import insert_reading
-
-
-GOVEE_COMPANY_ID = 0xEC88
-MIN_PAYLOAD_LENGTH = 5
-
-
-def parse_h5075(data: bytes | None) -> tuple[float, float, int] | None:
-    if data is None or len(data) < MIN_PAYLOAD_LENGTH:
-        return None
-
-    raw_value = (data[1] << 16) | (data[2] << 8) | data[3]
-    is_negative = bool(raw_value & 0x800000)
-    magnitude = raw_value & 0x7FFFFF
-
-    temperature = ((-1 if is_negative else 1) * (magnitude // 1000)) / 10
-    humidity = (magnitude % 1000) / 10
-    battery = data[4]
-
-    return temperature, humidity, battery
+from sensors import detect_and_parse
 
 
 class WriteThrottle:
@@ -54,9 +36,9 @@ logger = logging.getLogger(__name__)
 class Reading:
     mac: str
     device_name: str | None
-    temperature: float
-    humidity: float
-    battery: int
+    sensor_type: str
+    measurements: dict[str, float | int]
+    battery: int | None
     rssi: int | None
     recorded_at: str
 
@@ -84,38 +66,30 @@ class Collector:
 
     def _on_detection(self, device: BLEDevice, advertisement_data: AdvertisementData) -> None:
         name = device.name or ""
-        if "h5075" not in name.lower():
-            return
-
-        mfr_data = advertisement_data.manufacturer_data.get(GOVEE_COMPANY_ID)
-        if mfr_data is None:
-            return
-
-        result = parse_h5075(mfr_data)
+        result = detect_and_parse(advertisement_data.manufacturer_data, name)
         if result is None:
             return
 
-        temperature, humidity, battery = result
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         mac = device.address
 
         reading = Reading(
             mac=mac,
             device_name=name,
-            temperature=temperature,
-            humidity=humidity,
-            battery=battery,
+            sensor_type=result.sensor_type,
+            measurements=result.measurements,
+            battery=result.battery,
             rssi=advertisement_data.rssi,
             recorded_at=now,
         )
 
         self.latest_readings[mac] = reading
         logger.info(
-            "%s | %s | %.1f°C | %.1f%% RH | bat=%d%% | rssi=%s | raw=%s",
-            now, mac, temperature, humidity, battery,
-            advertisement_data.rssi, mfr_data.hex(),
+            "%s | %s | %s | %s | bat=%s | rssi=%s",
+            now, mac, result.sensor_type, result.measurements,
+            result.battery, advertisement_data.rssi,
         )
 
         if self._throttle.should_write(mac):
-            insert_reading(self._db, mac, name, temperature, humidity, battery, advertisement_data.rssi, now)
+            insert_reading(self._db, reading)
             self._throttle.record_write(mac)
