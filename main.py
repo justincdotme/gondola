@@ -11,7 +11,7 @@ from fastapi.exceptions import HTTPException as StarletteHTTPException
 from config import load_config
 from database import init_db, get_readings, delete_old_readings
 from collector import Collector
-from auth import require_hmac_auth, InvalidApiKey
+from auth import require_hmac_auth, InvalidApiKey, AuthTracker
 
 
 logger = logging.getLogger(__name__)
@@ -70,6 +70,7 @@ def create_app() -> FastAPI:
                 db.close()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+    app.state.auth_tracker = AuthTracker()
 
     @app.exception_handler(InvalidApiKey)
     async def handle_invalid_api_key(request, exc):
