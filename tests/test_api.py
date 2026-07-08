@@ -205,3 +205,22 @@ def test_readings_unknown_mac(client):
 def test_readings_requires_auth(client):
     resp = client.get("/api/v1/readings", params={"mac": "A4:C1:38:7D:3A:14"})
     assert resp.status_code == 401
+
+
+def test_health_not_rate_limited(client):
+    limiter = client.app.state.rate_limiter
+    limiter.max_requests = 1
+    client.get("/api/v1/health")
+    resp = client.get("/api/v1/health")
+    assert resp.status_code == 200
+
+
+def test_rate_limited_returns_429(client):
+    limiter = client.app.state.rate_limiter
+    limiter.max_requests = 1
+    headers = make_hmac_headers("GET", "/api/v1/sensors")
+    client.get("/api/v1/sensors", headers=headers)
+    headers = make_hmac_headers("GET", "/api/v1/sensors")
+    resp = client.get("/api/v1/sensors", headers=headers)
+    assert resp.status_code == 429
+    assert "Retry-After" in resp.headers

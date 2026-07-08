@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import HTTPException as StarletteHTTPException
 
@@ -12,6 +12,7 @@ from config import load_config
 from database import init_db, get_readings, delete_old_readings
 from collector import Collector
 from auth import require_hmac_auth, InvalidApiKey, AuthTracker
+from rate_limit import RateLimiter
 
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.auth_tracker = AuthTracker()
+    app.state.rate_limiter = RateLimiter()
 
     @app.exception_handler(InvalidApiKey)
     async def handle_invalid_api_key(request, exc):
@@ -81,6 +83,23 @@ def create_app() -> FastAPI:
         if isinstance(exc.detail, dict):
             return JSONResponse(status_code=exc.status_code, content=exc.detail)
         return JSONResponse(status_code=exc.status_code, content={"error": str(exc.detail)})
+
+    @app.middleware("http")
+    async def rate_limit_middleware(request: Request, call_next):
+        if request.url.path == "/api/v1/health":
+            return await call_next(request)
+
+        limiter = request.app.state.rate_limiter
+        allowed, retry_after = limiter.check(request.client.host)
+
+        if not allowed:
+            return JSONResponse(
+                status_code=429,
+                content={"error": "Rate limit exceeded"},
+                headers={"Retry-After": str(retry_after)},
+            )
+
+        return await call_next(request)
 
     @app.get("/api/v1/health")
     async def health():
