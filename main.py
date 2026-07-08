@@ -4,14 +4,15 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import HTTPException as StarletteHTTPException
 
 from config import load_config
 from database import init_db, get_readings, delete_old_readings
 from collector import Collector
-from auth import require_api_key, InvalidApiKey
+from auth import require_hmac_auth, InvalidApiKey, AuthTracker
+from rate_limit import RateLimiter
 
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,8 @@ def create_app() -> FastAPI:
                 db.close()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+    app.state.auth_tracker = AuthTracker()
+    app.state.rate_limiter = RateLimiter()
 
     @app.exception_handler(InvalidApiKey)
     async def handle_invalid_api_key(request, exc):
@@ -80,6 +83,26 @@ def create_app() -> FastAPI:
         if isinstance(exc.detail, dict):
             return JSONResponse(status_code=exc.status_code, content=exc.detail)
         return JSONResponse(status_code=exc.status_code, content={"error": str(exc.detail)})
+
+    @app.middleware("http")
+    async def rate_limit_middleware(request: Request, call_next):
+        if request.url.path == "/api/v1/health":
+            return await call_next(request)
+
+        if not request.client:
+            return await call_next(request)
+
+        limiter = request.app.state.rate_limiter
+        allowed, retry_after = limiter.check(request.client.host)
+
+        if not allowed:
+            return JSONResponse(
+                status_code=429,
+                content={"error": "Rate limit exceeded"},
+                headers={"Retry-After": str(retry_after)},
+            )
+
+        return await call_next(request)
 
     @app.get("/api/v1/health")
     async def health():
@@ -97,7 +120,7 @@ def create_app() -> FastAPI:
         }
 
     @app.get("/api/v1/sensors")
-    async def sensors(key: str = Depends(require_api_key)):
+    async def sensors(_: None = Depends(require_hmac_auth)):
         collector_latest = getattr(app.state, "collector_latest", {})
         sensors_list = []
         for mac, reading in collector_latest.items():
@@ -120,7 +143,7 @@ def create_app() -> FastAPI:
         limit: int = 100,
         from_: datetime | None = Query(default=None, alias="from"),
         to: datetime | None = Query(default=None, alias="to"),
-        key: str = Depends(require_api_key),
+        _: None = Depends(require_hmac_auth),
     ):
         if limit > 1000:
             limit = 1000

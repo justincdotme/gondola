@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from main import create_app
 from collector import Reading
 from database import init_db, insert_reading
+from conftest import make_hmac_headers
 
 
 @pytest.fixture
@@ -43,9 +44,6 @@ def client(db_path, monkeypatch):
     return TestClient(app)
 
 
-HEADERS = {"X-API-Key": "test-key"}
-
-
 def test_health_no_auth_required(client):
     resp = client.get("/api/v1/health")
     assert resp.status_code == 200
@@ -56,7 +54,8 @@ def test_health_no_auth_required(client):
 
 
 def test_sensors_returns_latest(client):
-    resp = client.get("/api/v1/sensors", headers=HEADERS)
+    headers = make_hmac_headers("GET", "/api/v1/sensors")
+    resp = client.get("/api/v1/sensors", headers=headers)
     assert resp.status_code == 200
     sensors = resp.json()["sensors"]
     assert len(sensors) == 1
@@ -71,7 +70,12 @@ def test_sensors_requires_auth(client):
 
 
 def test_readings_ascending_order(client):
-    resp = client.get("/api/v1/readings", params={"mac": "A4:C1:38:7D:3A:14"}, headers=HEADERS)
+    headers = make_hmac_headers("GET", "/api/v1/readings")
+    resp = client.get(
+        "/api/v1/readings",
+        params={"mac": "A4:C1:38:7D:3A:14"},
+        headers=headers,
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert body["count"] == 2
@@ -81,7 +85,12 @@ def test_readings_ascending_order(client):
 
 
 def test_readings_with_limit(client):
-    resp = client.get("/api/v1/readings", params={"mac": "A4:C1:38:7D:3A:14", "limit": 1}, headers=HEADERS)
+    headers = make_hmac_headers("GET", "/api/v1/readings")
+    resp = client.get(
+        "/api/v1/readings",
+        params={"mac": "A4:C1:38:7D:3A:14", "limit": 1},
+        headers=headers,
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert body["count"] == 1
@@ -90,7 +99,12 @@ def test_readings_with_limit(client):
 
 
 def test_readings_with_from(client):
-    resp = client.get("/api/v1/readings", params={"mac": "A4:C1:38:7D:3A:14", "from": "2026-07-03T13:59:30Z"}, headers=HEADERS)
+    headers = make_hmac_headers("GET", "/api/v1/readings")
+    resp = client.get(
+        "/api/v1/readings",
+        params={"mac": "A4:C1:38:7D:3A:14", "from": "2026-07-03T13:59:30Z"},
+        headers=headers,
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert body["count"] == 1
@@ -99,7 +113,12 @@ def test_readings_with_from(client):
 
 
 def test_readings_with_to(client):
-    resp = client.get("/api/v1/readings", params={"mac": "A4:C1:38:7D:3A:14", "to": "2026-07-03T13:59:00Z"}, headers=HEADERS)
+    headers = make_hmac_headers("GET", "/api/v1/readings")
+    resp = client.get(
+        "/api/v1/readings",
+        params={"mac": "A4:C1:38:7D:3A:14", "to": "2026-07-03T13:59:00Z"},
+        headers=headers,
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert body["count"] == 1
@@ -117,7 +136,7 @@ def test_readings_from_to_window(client):
         "mac": "A4:C1:38:7D:3A:14",
         "from": "2026-07-03T13:59:00Z",
         "to": "2026-07-03T14:01:00Z",
-    }, headers=HEADERS)
+    }, headers=make_hmac_headers("GET", "/api/v1/readings"))
     body = resp.json()
     assert body["count"] == 2
     assert body["has_more"] is False
@@ -133,38 +152,52 @@ def test_readings_has_more(client):
                                     recorded_at=f"2026-07-03T15:0{i}:00Z"))
     resp = client.get("/api/v1/readings",
                       params={"mac": "A4:C1:38:7D:3A:14", "limit": 3},
-                      headers=HEADERS)
+                      headers=make_hmac_headers("GET", "/api/v1/readings"))
     body = resp.json()
     assert body["count"] == 3
     assert body["has_more"] is True
     assert body["readings"][0]["recorded_at"] == "2026-07-03T13:59:00Z"
 
     last_ts = body["readings"][-1]["recorded_at"]
-    resp = client.get("/api/v1/readings",
-                      params={"mac": "A4:C1:38:7D:3A:14", "limit": 3, "from": last_ts},
-                      headers=HEADERS)
+    headers = make_hmac_headers("GET", "/api/v1/readings")
+    resp = client.get(
+        "/api/v1/readings",
+        params={"mac": "A4:C1:38:7D:3A:14", "limit": 3, "from": last_ts},
+        headers=headers,
+    )
     body = resp.json()
     assert body["count"] == 3
     assert body["has_more"] is True
 
     last_ts = body["readings"][-1]["recorded_at"]
-    resp = client.get("/api/v1/readings",
-                      params={"mac": "A4:C1:38:7D:3A:14", "limit": 3, "from": last_ts},
-                      headers=HEADERS)
+    headers = make_hmac_headers("GET", "/api/v1/readings")
+    resp = client.get(
+        "/api/v1/readings",
+        params={"mac": "A4:C1:38:7D:3A:14", "limit": 3, "from": last_ts},
+        headers=headers,
+    )
     body = resp.json()
     assert body["count"] == 1
     assert body["has_more"] is False
 
 
 def test_readings_invalid_from_returns_422(client):
-    resp = client.get("/api/v1/readings",
-                      params={"mac": "A4:C1:38:7D:3A:14", "from": "not-a-date"},
-                      headers=HEADERS)
+    headers = make_hmac_headers("GET", "/api/v1/readings")
+    resp = client.get(
+        "/api/v1/readings",
+        params={"mac": "A4:C1:38:7D:3A:14", "from": "not-a-date"},
+        headers=headers,
+    )
     assert resp.status_code == 422
 
 
 def test_readings_unknown_mac(client):
-    resp = client.get("/api/v1/readings", params={"mac": "00:00:00:00:00:00"}, headers=HEADERS)
+    headers = make_hmac_headers("GET", "/api/v1/readings")
+    resp = client.get(
+        "/api/v1/readings",
+        params={"mac": "00:00:00:00:00:00"},
+        headers=headers,
+    )
     assert resp.status_code == 404
     assert resp.json()["error"] == "Unknown sensor"
 
@@ -172,3 +205,22 @@ def test_readings_unknown_mac(client):
 def test_readings_requires_auth(client):
     resp = client.get("/api/v1/readings", params={"mac": "A4:C1:38:7D:3A:14"})
     assert resp.status_code == 401
+
+
+def test_health_not_rate_limited(client):
+    limiter = client.app.state.rate_limiter
+    limiter.max_requests = 1
+    client.get("/api/v1/health")
+    resp = client.get("/api/v1/health")
+    assert resp.status_code == 200
+
+
+def test_rate_limited_returns_429(client):
+    limiter = client.app.state.rate_limiter
+    limiter.max_requests = 1
+    headers = make_hmac_headers("GET", "/api/v1/sensors")
+    client.get("/api/v1/sensors", headers=headers)
+    headers = make_hmac_headers("GET", "/api/v1/sensors")
+    resp = client.get("/api/v1/sensors", headers=headers)
+    assert resp.status_code == 429
+    assert "Retry-After" in resp.headers
