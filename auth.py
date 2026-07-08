@@ -1,13 +1,38 @@
+import hashlib
+import hmac
 import os
-from fastapi import Header
+import time
+
+from fastapi import Header, Request
 
 
 class InvalidApiKey(Exception):
     pass
 
 
-def require_api_key(x_api_key: str = Header(default=None)) -> str:
-    expected = os.environ.get("SENSOR_GATEWAY_API_KEY", "")
-    if not x_api_key or x_api_key != expected:
-        raise InvalidApiKey()
-    return x_api_key
+TIMESTAMP_WINDOW = 60
+
+
+def require_hmac_auth(
+    request: Request,
+    x_signature: str | None = Header(default=None),
+    x_timestamp: str | None = Header(default=None),
+) -> None:
+    secret = os.environ.get("SENSOR_GATEWAY_API_KEY", "")
+
+    if x_signature and x_timestamp:
+        try:
+            ts = int(x_timestamp)
+            if abs(time.time() - ts) <= TIMESTAMP_WINDOW:
+                canonical = (
+                    f"{request.method}\n{request.url.path}\n{x_timestamp}"
+                )
+                expected = hmac.new(
+                    secret.encode(), canonical.encode(), hashlib.sha256
+                ).hexdigest()
+                if hmac.compare_digest(x_signature, expected):
+                    return
+        except ValueError:
+            pass
+
+    raise InvalidApiKey()

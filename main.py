@@ -11,7 +11,7 @@ from fastapi.exceptions import HTTPException as StarletteHTTPException
 from config import load_config
 from database import init_db, get_readings, delete_old_readings
 from collector import Collector
-from auth import require_api_key, InvalidApiKey
+from auth import require_hmac_auth, InvalidApiKey
 
 
 logger = logging.getLogger(__name__)
@@ -97,7 +97,7 @@ def create_app() -> FastAPI:
         }
 
     @app.get("/api/v1/sensors")
-    async def sensors(key: str = Depends(require_api_key)):
+    async def sensors(_: None = Depends(require_hmac_auth)):
         collector_latest = getattr(app.state, "collector_latest", {})
         sensors_list = []
         for mac, reading in collector_latest.items():
@@ -120,7 +120,7 @@ def create_app() -> FastAPI:
         limit: int = 100,
         from_: datetime | None = Query(default=None, alias="from"),
         to: datetime | None = Query(default=None, alias="to"),
-        key: str = Depends(require_api_key),
+        _: None = Depends(require_hmac_auth),
     ):
         if limit > 1000:
             limit = 1000
