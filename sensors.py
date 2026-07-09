@@ -2,7 +2,9 @@ from dataclasses import dataclass
 
 
 GOVEE_COMPANY_ID = 0xEC88
+ESPRESSIF_COMPANY_ID = 0x02E5
 MIN_PAYLOAD_LENGTH = 5
+GONDOLA_LUX_PAYLOAD_LENGTH = 10
 
 
 @dataclass
@@ -31,9 +33,30 @@ def parse_govee_h5075(data: bytes | None) -> SensorResult | None:
     )
 
 
+def parse_gondola_lux(data: bytes | None) -> SensorResult | None:
+    if data is None or len(data) < GONDOLA_LUX_PAYLOAD_LENGTH:
+        return None
+
+    if data[0] != 0x01:
+        return None
+
+    centilux = int.from_bytes(data[1:5], byteorder="big")
+    lux = centilux / 100.0
+    white = int.from_bytes(data[5:7], byteorder="big")
+    als = int.from_bytes(data[7:9], byteorder="big")
+    battery = data[9] if data[9] != 0xFF else None
+
+    return SensorResult(
+        sensor_type="gondola_lux",
+        measurements={"lux": lux, "white": white, "als": als},
+        battery=battery,
+    )
+
+
 # (manufacturer_id, name_pattern, parser_fn)
 PARSERS = [
     (GOVEE_COMPANY_ID, "h5075", parse_govee_h5075),
+    (ESPRESSIF_COMPANY_ID, "gondola-lux", parse_gondola_lux),
 ]
 
 
