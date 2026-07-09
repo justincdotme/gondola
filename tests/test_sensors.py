@@ -1,5 +1,5 @@
 import pytest
-from sensors import parse_govee_h5075, detect_and_parse, GOVEE_COMPANY_ID
+from sensors import parse_govee_h5075, parse_gondola_lux, detect_and_parse, GOVEE_COMPANY_ID, ESPRESSIF_COMPANY_ID
 
 
 @pytest.mark.parametrize("payload_hex,expected_temp,expected_humidity,expected_battery", [
@@ -41,3 +41,44 @@ def test_detect_and_parse_skips_unknown_device():
 def test_detect_and_parse_skips_unknown_manufacturer():
     payload = bytes.fromhex("0003704c37")
     assert detect_and_parse({0x0000: payload}, "GVH5075_3A14") is None
+
+
+@pytest.mark.parametrize("payload_hex,expected_lux,expected_white,expected_als,expected_battery", [
+    ("01000186D201F401C2FF", 1000.50, 500, 450, None),
+    ("010000000000000000FF", 0.0, 0, 0, None),
+    ("0100989680FFFFFFFF55", 100000.0, 65535, 65535, 85),
+], ids=["normal", "zero", "high-with-battery"])
+def test_parse_gondola_lux_valid(payload_hex, expected_lux, expected_white, expected_als, expected_battery):
+    data = bytes.fromhex(payload_hex)
+    result = parse_gondola_lux(data)
+    assert result is not None
+    assert result.sensor_type == "gondola_lux"
+    assert result.measurements["lux"] == pytest.approx(expected_lux, abs=0.01)
+    assert result.measurements["white"] == expected_white
+    assert result.measurements["als"] == expected_als
+    assert result.battery == expected_battery
+
+
+def test_parse_gondola_lux_short_payload():
+    assert parse_gondola_lux(bytes.fromhex("01000186D201F401C2")) is None
+
+
+def test_parse_gondola_lux_none_input():
+    assert parse_gondola_lux(None) is None
+
+
+def test_parse_gondola_lux_wrong_version():
+    assert parse_gondola_lux(bytes.fromhex("02000186D201F401C2FF")) is None
+
+
+def test_detect_and_parse_gondola_lux():
+    payload = bytes.fromhex("01000186D201F401C2FF")
+    result = detect_and_parse({ESPRESSIF_COMPANY_ID: payload}, "Gondola-Lux-01")
+    assert result is not None
+    assert result.sensor_type == "gondola_lux"
+    assert result.measurements["lux"] == pytest.approx(1000.50, abs=0.01)
+
+
+def test_detect_and_parse_skips_non_lux_name():
+    payload = bytes.fromhex("01000186D201F401C2FF")
+    assert detect_and_parse({ESPRESSIF_COMPANY_ID: payload}, "SomeOtherESP32") is None
