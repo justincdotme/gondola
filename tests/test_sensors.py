@@ -1,5 +1,12 @@
 import pytest
-from sensors import parse_govee_h5075, parse_gondola_lux, detect_and_parse, GOVEE_COMPANY_ID, ESPRESSIF_COMPANY_ID
+from sensors import (
+    parse_govee_h5075,
+    parse_gondola_lux,
+    parse_gondola_moisture,
+    detect_and_parse,
+    GOVEE_COMPANY_ID,
+    ESPRESSIF_COMPANY_ID,
+)
 
 
 @pytest.mark.parametrize("payload_hex,expected_temp,expected_humidity,expected_battery", [
@@ -81,4 +88,43 @@ def test_detect_and_parse_gondola_lux():
 
 def test_detect_and_parse_skips_non_lux_name():
     payload = bytes.fromhex("01000186D201F401C2FF")
+    assert detect_and_parse({ESPRESSIF_COMPANY_ID: payload}, "SomeOtherESP32") is None
+
+
+@pytest.mark.parametrize("payload_hex,expected_moisture,expected_battery", [
+    ("010800FFFF", 2048, None),
+    ("010FFFFFFF", 4095, None),
+    ("0108000E74", 2048, 3700),
+], ids=["mid-range", "max-adc", "with-battery-millivolts"])
+def test_parse_gondola_moisture_valid(payload_hex, expected_moisture, expected_battery):
+    data = bytes.fromhex(payload_hex)
+    result = parse_gondola_moisture(data)
+    assert result is not None
+    assert result.sensor_type == "gondola_moisture"
+    assert result.measurements["moisture"] == expected_moisture
+    assert result.battery == expected_battery
+
+
+def test_parse_gondola_moisture_short_payload():
+    assert parse_gondola_moisture(bytes.fromhex("010800FF")) is None
+
+
+def test_parse_gondola_moisture_none_input():
+    assert parse_gondola_moisture(None) is None
+
+
+def test_parse_gondola_moisture_wrong_version():
+    assert parse_gondola_moisture(bytes.fromhex("020800FFFF")) is None
+
+
+def test_detect_and_parse_gondola_moisture():
+    payload = bytes.fromhex("010800FFFF")
+    result = detect_and_parse({ESPRESSIF_COMPANY_ID: payload}, "Gondola-Moisture-01")
+    assert result is not None
+    assert result.sensor_type == "gondola_moisture"
+    assert result.measurements["moisture"] == 2048
+
+
+def test_detect_and_parse_skips_non_moisture_name():
+    payload = bytes.fromhex("010800FFFF")
     assert detect_and_parse({ESPRESSIF_COMPANY_ID: payload}, "SomeOtherESP32") is None
