@@ -5,6 +5,7 @@ GOVEE_COMPANY_ID = 0xEC88
 ESPRESSIF_COMPANY_ID = 0x02E5
 MIN_PAYLOAD_LENGTH = 5
 GONDOLA_LUX_PAYLOAD_LENGTH = 10
+GONDOLA_MOISTURE_PAYLOAD_LENGTH = 5
 
 
 @dataclass
@@ -53,10 +54,29 @@ def parse_gondola_lux(data: bytes | None) -> SensorResult | None:
     )
 
 
+def parse_gondola_moisture(data: bytes | None) -> SensorResult | None:
+    if data is None or len(data) < GONDOLA_MOISTURE_PAYLOAD_LENGTH:
+        return None
+
+    if data[0] != 0x01:
+        return None
+
+    moisture = int.from_bytes(data[1:3], byteorder="big")
+    battery_raw = int.from_bytes(data[3:5], byteorder="big")
+    battery = None if battery_raw == 0xFFFF else battery_raw
+
+    return SensorResult(
+        sensor_type="gondola_moisture",
+        measurements={"moisture": moisture},
+        battery=battery,
+    )
+
+
 # (manufacturer_id, name_pattern, parser_fn)
 PARSERS = [
     (GOVEE_COMPANY_ID, "h5075", parse_govee_h5075),
     (ESPRESSIF_COMPANY_ID, "gondola-lux", parse_gondola_lux),
+    (ESPRESSIF_COMPANY_ID, "gondola-moisture", parse_gondola_moisture),
 ]
 
 
