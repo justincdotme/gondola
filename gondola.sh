@@ -66,17 +66,25 @@ case "${1:-}" in
     if [ ! -f "$PID_FILE" ]; then
       echo "WARNING: No PID file. Found orphaned process (PID $PID)." >&2
     fi
-    if kill "$PID" 2>/dev/null; then
-      rm -f "$PID_FILE"
-      echo "Stopped (PID $PID)"
-    else
-      rm -f "$PID_FILE"
-      echo "Process $PID already exited, cleaned up" >&2
+    kill "$PID" 2>/dev/null
+    WAIT=0
+    while [ "$WAIT" -lt 10 ] && kill -0 "$PID" 2>/dev/null; do
+      sleep 1
+      WAIT=$((WAIT + 1))
+    done
+    if kill -0 "$PID" 2>/dev/null; then
+      kill -9 "$PID" 2>/dev/null
+      sleep 1
     fi
+    rm -f "$PID_FILE"
+    if kill -0 "$PID" 2>/dev/null; then
+      echo "Failed to stop process $PID" >&2
+      exit 1
+    fi
+    echo "Stopped (PID $PID)"
     ;;
   --restart)
     "$0" --stop || true
-    sleep 1
     "$0" --start
     ;;
   --status)
