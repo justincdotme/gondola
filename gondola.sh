@@ -30,8 +30,15 @@ case "${1:-}" in
     cd "$SCRIPT_DIR"
     nohup "$SCRIPT_DIR/venv/bin/python" main.py >> "$LOG_FILE" 2>&1 &
     echo $! > "$PID_FILE"
-    PORT=${SENSOR_PORT:-8443}
-    HEALTH_URL="https://localhost:$PORT/api/v1/health"
+    PORT=${SENSOR_PORT:-8075}
+    if [ -n "${SENSOR_TLS_CERT:-}" ] && [ -n "${SENSOR_TLS_KEY:-}" ] && \
+       [ -f "${SENSOR_TLS_CERT:-}" ] && [ -f "${SENSOR_TLS_KEY:-}" ]; then
+      HEALTH_URL="https://localhost:$PORT/api/v1/health"
+      CURL_TLS="-sk"
+    else
+      HEALTH_URL="http://localhost:$PORT/api/v1/health"
+      CURL_TLS="-s"
+    fi
     TRIES=0
     while [ "$TRIES" -lt 10 ]; do
       sleep 1
@@ -40,7 +47,7 @@ case "${1:-}" in
         echo "Failed to start. Check gondola.log" >&2
         exit 1
       fi
-      if curl -sk --max-time 2 "$HEALTH_URL" >/dev/null 2>&1; then
+      if curl $CURL_TLS --max-time 2 "$HEALTH_URL" >/dev/null 2>&1; then
         echo "Started (PID $!, listening on port $PORT)"
         break
       fi
@@ -59,17 +66,25 @@ case "${1:-}" in
     if [ ! -f "$PID_FILE" ]; then
       echo "WARNING: No PID file. Found orphaned process (PID $PID)." >&2
     fi
-    if kill "$PID" 2>/dev/null; then
-      rm -f "$PID_FILE"
-      echo "Stopped (PID $PID)"
-    else
-      rm -f "$PID_FILE"
-      echo "Process $PID already exited, cleaned up" >&2
+    kill "$PID" 2>/dev/null
+    WAIT=0
+    while [ "$WAIT" -lt 10 ] && kill -0 "$PID" 2>/dev/null; do
+      sleep 1
+      WAIT=$((WAIT + 1))
+    done
+    if kill -0 "$PID" 2>/dev/null; then
+      kill -9 "$PID" 2>/dev/null
+      sleep 1
     fi
+    rm -f "$PID_FILE"
+    if kill -0 "$PID" 2>/dev/null; then
+      echo "Failed to stop process $PID" >&2
+      exit 1
+    fi
+    echo "Stopped (PID $PID)"
     ;;
   --restart)
     "$0" --stop || true
-    sleep 1
     "$0" --start
     ;;
   --status)
@@ -84,9 +99,16 @@ case "${1:-}" in
     set -a
     . "$SCRIPT_DIR/.env"
     set +a
-    PORT=${SENSOR_PORT:-8443}
-    HEALTH_URL="https://localhost:$PORT/api/v1/health"
-    if curl -sk --max-time 3 "$HEALTH_URL" >/dev/null 2>&1; then
+    PORT=${SENSOR_PORT:-8075}
+    if [ -n "${SENSOR_TLS_CERT:-}" ] && [ -n "${SENSOR_TLS_KEY:-}" ] && \
+       [ -f "${SENSOR_TLS_CERT:-}" ] && [ -f "${SENSOR_TLS_KEY:-}" ]; then
+      HEALTH_URL="https://localhost:$PORT/api/v1/health"
+      CURL_TLS="-sk"
+    else
+      HEALTH_URL="http://localhost:$PORT/api/v1/health"
+      CURL_TLS="-s"
+    fi
+    if curl $CURL_TLS --max-time 3 "$HEALTH_URL" >/dev/null 2>&1; then
       echo "Running (PID $PID, listening on port $PORT)"
     else
       echo "Process running (PID $PID) but not responding on port $PORT"
