@@ -3,6 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
+import sentry_sdk
 import uvicorn
 from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -34,13 +35,17 @@ async def retention_loop(db, retention_days):
 
 
 def create_app() -> FastAPI:
+    boot_config = load_config()
+
+    if boot_config.sentry_dsn:
+        sentry_sdk.init(dsn=boot_config.sentry_dsn, traces_sample_rate=0)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if hasattr(app.state, "db") and app.state.db is not None:
             yield
         else:
-            config = load_config()
+            config = boot_config
             db = init_db(config.db_path)
             app.state.db = db
             app.state.collector_latest = {}
