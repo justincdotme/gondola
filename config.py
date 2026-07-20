@@ -14,6 +14,7 @@ class Config:
     bluetooth_adapter: str | None
     tls_cert: str | None
     tls_key: str | None
+    sentry_dsn: str | None
 
 
 def load_config() -> Config:
@@ -35,4 +36,5 @@ def load_config() -> Config:
         bluetooth_adapter=os.environ.get("BLUETOOTH_ADAPTER") or None,
         tls_cert=os.environ.get("SENSOR_TLS_CERT") or None,
         tls_key=os.environ.get("SENSOR_TLS_KEY") or None,
+        sentry_dsn=os.environ.get("SENTRY_DSN") or None,
     )
