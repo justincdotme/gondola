@@ -153,8 +153,7 @@ def create_app() -> FastAPI:
         to: datetime | None = Query(default=None, alias="to"),
         _: None = Depends(require_hmac_auth),
     ):
-        if limit > 1000:
-            limit = 1000
+        limit = max(1, min(limit, 1000))
 
         collector_latest = getattr(app.state, "collector_latest", {})
         db = app.state.db
