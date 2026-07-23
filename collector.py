@@ -12,6 +12,7 @@ from bleak.backends.scanner import AdvertisementData
 from config import Config
 from database import insert_reading
 from sensors import detect_and_parse
+import re
 
 
 class WriteThrottle:
@@ -30,6 +31,14 @@ class WriteThrottle:
 
 
 logger = logging.getLogger(__name__)
+
+
+_CONTROL_CHARS = re.compile(r'[\x00-\x1f\x7f-\x9f]')
+
+
+def sanitize_device_name(raw: str) -> str:
+    cleaned = _CONTROL_CHARS.sub('', raw)
+    return cleaned.encode('utf-8')[:64].decode('utf-8', errors='ignore')
 
 
 @dataclass
@@ -65,7 +74,7 @@ class Collector:
                 await asyncio.sleep(1)
 
     def _on_detection(self, device: BLEDevice, advertisement_data: AdvertisementData) -> None:
-        name = device.name or ""
+        name = sanitize_device_name(device.name or "")
         result = detect_and_parse(advertisement_data.manufacturer_data, name)
         if result is None:
             return
