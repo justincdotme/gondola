@@ -224,3 +224,21 @@ def test_rate_limited_returns_429(client):
     resp = client.get("/api/v1/sensors", headers=headers)
     assert resp.status_code == 429
     assert "Retry-After" in resp.headers
+
+
+@pytest.mark.parametrize("limit_value,expected_count", [
+    (0, 1),
+    (-1, 1),
+    (-2, 1),
+], ids=["zero", "negative-one", "negative-two"])
+def test_readings_negative_limit_clamped_to_one(client, limit_value, expected_count):
+    headers = make_hmac_headers("GET", "/api/v1/readings")
+    resp = client.get(
+        "/api/v1/readings",
+        params={"mac": "A4:C1:38:7D:3A:14", "limit": limit_value},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["count"] == expected_count
+    assert body["has_more"] is True
